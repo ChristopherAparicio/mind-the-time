@@ -148,6 +148,9 @@ func TestEmbeddedUIOwnsItsProviderUnavailableState(t *testing.T) {
 	if !strings.Contains(body, "ÉVALUATION PRIM INDISPONIBLE") {
 		t.Errorf("embedded UI does not render its unavailable state: %s", body)
 	}
+	if !strings.Contains(body, `href="https://prim.iledefrance-mobilites.fr"`) || !strings.Contains(body, "IDFM_PRIM_API_KEY") {
+		t.Errorf("embedded UI does not tell how to obtain and configure a PRIM key: %s", body)
+	}
 	if strings.Contains(body, "Route provider is unavailable.") {
 		t.Errorf("embedded UI includes fallback unavailable markup: %s", body)
 	}

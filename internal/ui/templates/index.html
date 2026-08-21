@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mind the Time — Recommandation de départ</title>
-  <link rel="stylesheet" href="/static/style.css?v=13">
+  <link rel="stylesheet" href="/static/style.css?v=14">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
   <meta name="theme-color" content="#009e73">
@@ -34,6 +34,23 @@
       <div class="status-time">MAJ: TEMPS RÉEL ACTIF</div>
       {{end}}
     </div>
+
+    {{if .ProviderUnavailable}}
+    <div role="status" class="transit-card alert-card">
+      <div class="card-header warning-header">
+        <span class="status-dot warning-dot"></span>
+        <h2>CLÉ PRIM NON CONFIGURÉE</h2>
+      </div>
+      <div class="card-body">
+        <p class="alert-message">
+          Le serveur n'a pas de clé API IDFM PRIM : vous pouvez enregistrer vos trajets, mais l'exploration des lignes et la planification des départs sont désactivées.
+        </p>
+        <p class="alert-message" style="margin-top: var(--space-2);">
+          Obtenez une clé gratuite sur le portail <a href="https://prim.iledefrance-mobilites.fr" target="_blank" rel="noopener noreferrer">prim.iledefrance-mobilites.fr</a> (API « Calculateur d'itinéraires »), puis démarrez le serveur avec <code>IDFM_PRIM_API_KEY</code> et <code>IDFM_PRIM_ROUTE_URL</code> (voir le README).
+        </p>
+      </div>
+    </div>
+    {{end}}
 
     {{if .Error}}
     <div role="alert" class="transit-card alert-card" style="border-color: var(--accent-error); box-shadow: 4px 4px 0px 0px var(--accent-error);">
@@ -184,6 +201,6 @@
     <p>© 2026 Mind the Time — Île-de-France Mobilités</p>
   </footer>
 
-  <script src="/static/app.js?v=13"></script>
+  <script src="/static/app.js?v=14"></script>
 </body>
 </html>

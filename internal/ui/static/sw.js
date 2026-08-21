@@ -1,4 +1,4 @@
-const CACHE_NAME = "mind-the-time-v13";
+const CACHE_NAME = "mind-the-time-v14";
 const ASSETS = [
   "/static/style.css",
   "/static/app.js",
