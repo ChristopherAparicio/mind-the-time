@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hors ligne - Mind the Time</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+  <meta name="theme-color" content="#009e73">
+</head>
+<body class="transit-theme">
+  <header class="transit-header">
+    <div class="header-container">
+      <div class="logo-badge">M14</div>
+      <h1 class="app-title">MIND THE TIME</h1>
+    </div>
+  </header>
+
+  <main class="transit-container" id="main-content">
+    <div class="transit-card alert-card">
+      <div class="card-header error-header">
+        <span class="status-dot error-dot"></span>
+        <h2>CONNEXION INTERROMPUE</h2>
+      </div>
+      <div class="card-body">
+        <div class="offline-illustration">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-error">
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+            <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path>
+            <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path>
+            <path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path>
+            <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+            <line x1="12" y1="20" x2="12.01" y2="20"></line>
+          </svg>
+        </div>
+        <p class="offline-message">
+          Votre connexion au service est interrompue. Veuillez vous reconnecter pour gérer vos trajets enregistrés.
+        </p>
+        <p class="offline-message" style="margin-top: var(--space-2); font-size: 0.9rem; color: var(--text-muted);">
+          Note : L'évaluation PRIM reste indisponible dans cette version car son format de réponse n'est pas pris en charge.
+        </p>
+        <div class="action-group">
+          <button onclick="window.location.reload()" class="btn btn-primary">RÉESSAYER LA CONNEXION</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="transit-footer">
+    <p>© 2026 Mind the Time — Île-de-France Mobilités</p>
+  </footer>
+</body>
+</html>

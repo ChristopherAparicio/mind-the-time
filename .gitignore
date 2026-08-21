@@ -1,0 +1,12 @@
+# Binaries, local env, and local dev data
+bin/
+data/
+data/*-dev.json
+.env
+/mind-the-time
+__pycache__/
+
+# Local replay recordings hold real journey searches (addresses, coordinates);
+# the replay unit test only makes sense with those local fixtures present.
+e2e/fixtures/
+internal/adapters/timetable_replay_test.go

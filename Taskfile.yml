@@ -1,0 +1,94 @@
+version: '3'
+
+# .env is git-ignored; it carries the PRIM credentials and the addresses the
+# local replay fixtures were recorded with (MTT_E2E_ORIGIN/MTT_E2E_DESTINATION).
+dotenv: ['.env']
+
+tasks:
+  check:
+    desc: Run unit tests, race detector, vet, and linter
+    cmds:
+      - go test ./...
+      - go test -race ./...
+      - go vet ./...
+      - golangci-lint run
+
+  build:
+    desc: Build the mind-the-time binary
+    cmds:
+      - go build -o bin/mind-the-time ./cmd/mind-the-time
+
+  restart:5435:
+    desc: Rebuild and restart the development server on port 5435
+    cmds:
+      - task: build
+      - |
+        PID=$(lsof -ti :5435 2>/dev/null || true)
+        if [ -n "$PID" ]; then
+          kill -9 $PID 2>/dev/null || true
+        fi
+      - HTTP_ADDR=127.0.0.1:5435 COOKIE_SECURE=false STORE_PATH=data/mind-the-time-dev.json ./bin/mind-the-time > /tmp/mind-the-time-user-test.log 2>&1 &
+      - sleep 1
+      - curl -s http://127.0.0.1:5435/healthz
+
+  e2e:
+    desc: Run the Playwright E2E functional test suite against a disposable server
+    cmds:
+      - task: e2e:run
+        vars: {SUITE: e2e/test_commute_e2e.py}
+
+  e2e:parity:
+    desc: Run the strict-replay fixture regression suite against a disposable server
+    cmds:
+      - task: e2e:run
+        vars: {SUITE: e2e/test_citymapper_parity.py}
+
+  e2e:run:
+    internal: true
+    desc: Start a throwaway server on E2E_PORT (default 5436) with its own store, run SUITE, then tear it down
+    cmds:
+      - task: build
+      - |
+        bash -c '
+        set -e
+        STORE_DIR=$(mktemp -d -t mind-the-time-e2e)
+        STORE="$STORE_DIR/store.json"
+        LOG="$STORE_DIR/server.log"
+        E2E_PORT="{{.E2E_PORT | default "5436"}}"
+        if lsof -ti :$E2E_PORT >/dev/null 2>&1; then
+          echo "port $E2E_PORT is already in use; refusing to stop another process" >&2
+          exit 1
+        fi
+        PROJECT_DIR=$(pwd)
+         (
+           cd "$STORE_DIR"
+           exec env -i PATH="$PATH" HOME="$HOME" HTTP_ADDR=127.0.0.1:$E2E_PORT COOKIE_SECURE=false STORE_PATH="$STORE" CACHE_TTL=1ns NOW_OVERRIDE=2026-08-11T12:00 PRIM_REPLAY_DIR="$PROJECT_DIR/e2e/fixtures" PRIM_REPLAY_STRICT=true IDFM_PRIM_API_KEY=e2e-replay-only-key IDFM_PRIM_ROUTE_URL=https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/journeys "$PROJECT_DIR/bin/mind-the-time"
+         ) > "$LOG" 2>&1 &
+         SERVER_PID=$!
+         cleanup() {
+           case "$SERVER_PID" in
+             ""|*[!0-9]*)
+             rm -rf "$STORE_DIR"
+             return
+             ;;
+           esac
+           kill "$SERVER_PID" 2>/dev/null || true
+           wait "$SERVER_PID" 2>/dev/null || true
+           rm -rf "$STORE_DIR"
+         }
+        trap cleanup EXIT
+        HEALTHY=false
+         for _ in $(seq 1 20); do
+           if [ "$(curl -fsS --max-time 1 http://127.0.0.1:$E2E_PORT/healthz 2>/dev/null || true)" = "ok" ]; then
+             HEALTHY=true
+             break
+           fi
+          sleep 0.5
+        done
+        if [ "$HEALTHY" != true ]; then
+          echo "mind-the-time E2E server did not become healthy" >&2
+          cat "$LOG" >&2
+          exit 1
+        fi
+        MIND_THE_TIME_BASE_URL=http://127.0.0.1:$E2E_PORT python3 {{.SUITE}}
+        '

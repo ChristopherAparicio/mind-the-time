@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <rect width="512" height="512" rx="112" fill="#121214"/>
+  <!-- Outer ring (clock face) -->
+  <circle cx="256" cy="256" r="180" fill="none" stroke="#009e73" stroke-width="24"/>
+  <!-- Clock ticks -->
+  <line x1="256" y1="100" x2="256" y2="124" stroke="#f4f4f6" stroke-width="12" stroke-linecap="round"/>
+  <line x1="256" y1="412" x2="256" y2="388" stroke="#f4f4f6" stroke-width="12" stroke-linecap="round"/>
+  <line x1="100" y1="256" x2="124" y2="256" stroke="#f4f4f6" stroke-width="12" stroke-linecap="round"/>
+  <line x1="412" y1="256" x2="388" y2="256" stroke="#f4f4f6" stroke-width="12" stroke-linecap="round"/>
+  <!-- Stylized Train Front / Metro Icon in the center -->
+  <rect x="196" y="210" width="120" height="110" rx="24" fill="#0055a5"/>
+  <rect x="211" y="225" width="90" height="45" rx="8" fill="#f4f4f6"/>
+  <!-- Train headlights -->
+  <circle cx="226" cy="295" r="10" fill="#df6c00"/>
+  <circle cx="286" cy="295" r="10" fill="#df6c00"/>
+  <!-- Clock hands overlaying or pointing -->
+  <line x1="256" y1="256" x2="256" y2="150" stroke="#f4f4f6" stroke-width="16" stroke-linecap="round"/>
+  <line x1="256" y1="256" x2="330" y2="256" stroke="#df6c00" stroke-width="12" stroke-linecap="round"/>
+  <!-- Center pin -->
+  <circle cx="256" cy="256" r="16" fill="#121214" stroke="#f4f4f6" stroke-width="6"/>
+</svg>

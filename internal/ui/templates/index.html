@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mind the Time — Recommandation de départ</title>
+  <link rel="stylesheet" href="/static/style.css?v=13">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+  <meta name="theme-color" content="#009e73">
+</head>
+<body class="transit-theme">
+  <header class="transit-header">
+    <div class="header-container">
+      <div class="logo-badge">M14</div>
+      <h1 class="app-title">MIND THE TIME</h1>
+    </div>
+  </header>
+
+  <main class="transit-container" id="main-content">
+    <!-- Live Status Region -->
+    <div aria-live="polite" class="status-bar">
+      {{if .ProviderUnavailable}}
+      <div class="status-indicator" style="color: var(--accent-warning);">
+        <span class="status-indicator-dot" style="background-color: var(--accent-warning); animation: none;"></span>
+        <span>ÉVALUATION PRIM INDISPONIBLE</span>
+      </div>
+      <div class="status-time">ENREGISTREMENT DISPONIBLE (RECOMMANDATIONS INDISPONIBLES)</div>
+      {{else}}
+      <div class="status-indicator">
+        <span class="status-indicator-dot"></span>
+        <span>ÉVALUATION PRIM OPÉRATIONNELLE</span>
+      </div>
+      <div class="status-time">MAJ: TEMPS RÉEL ACTIF</div>
+      {{end}}
+    </div>
+
+    {{if .Error}}
+    <div role="alert" class="transit-card alert-card" style="border-color: var(--accent-error); box-shadow: 4px 4px 0px 0px var(--accent-error);">
+      <div class="card-header error-header" style="border-bottom-color: var(--accent-error);">
+        <span class="status-dot error-dot"></span>
+        <h2>ERREUR</h2>
+      </div>
+      <div class="card-body">
+        <p class="alert-message">
+          <strong>Erreur :</strong> {{.Error}}
+        </p>
+      </div>
+    </div>
+    {{end}}
+
+    {{$formActive := or .ID (not .Commutes)}}
+    <div class="transit-card {{if .ID}}edit-mode{{end}}">
+      <fieldset class="segmented-control-fieldset">
+        <legend class="sr-only">Sélecteur de contenu</legend>
+        <div class="segmented-control">
+          <input type="radio" id="tab-commutes" name="tab-select" class="tab-radio sr-only"
+                 {{if not .Commutes}}disabled aria-disabled="true"{{end}}{{if not $formActive}} checked{{end}}>
+          <label for="tab-commutes" class="segment-button {{if not .Commutes}}disabled{{end}}">
+            <span class="status-dot secondary-dot"></span>
+            <span class="segment-text">TRAJETS ENREGISTRÉS</span>
+          </label>
+
+          <input type="radio" id="tab-form" name="tab-select" class="tab-radio sr-only"{{if $formActive}} checked{{end}}>
+          <label for="tab-form" class="segment-button">
+            <span class="status-dot {{if .ID}}secondary-dot{{else}}primary-dot{{end}}"></span>
+            <span class="segment-text">{{if .ID}}MODIFIER LE TRAJET{{else}}NOUVEAU TRAJET{{end}}</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="panel-content panel-commutes">
+        <div class="card-body" style="padding: 0;">
+          {{if .Commutes}}
+          <ul style="list-style: none; margin: 0; padding: 0;">
+            {{range .Commutes}}
+            <li class="commute-list-item">
+              <a href="/commutes/{{.ID}}" class="commute-link">
+                <span class="commute-name">
+                  <span style="color: var(--accent-primary);">✦</span>
+                  <span>{{.Name}}</span>
+                </span>
+                <span class="edit-link">
+                  Modifier →
+                </span>
+              </a>
+            </li>
+            {{end}}
+          </ul>
+          {{else}}
+          <div style="padding: var(--space-4); text-align: center; color: var(--text-muted);">
+            Aucun trajet enregistré.
+          </div>
+          {{end}}
+        </div>
+      </div>
+
+      <div class="panel-content panel-form">
+        <div class="card-body">
+          {{if .ID}}
+          <div style="display: flex; justify-content: flex-end; margin-bottom: var(--space-3);">
+            <a href="/" class="new-commute-link">
+              + Nouveau trajet
+            </a>
+          </div>
+          {{end}}
+          <form action="{{.FormAction}}" method="POST">
+            <div class="form-group">
+              <label for="name">Nom du trajet</label>
+              <input type="text" id="name" name="name" value="{{.Input.Name}}" class="form-control" placeholder="Ex: Travail, Maison" required>
+            </div>
+
+            <div class="form-group">
+              <label for="origin">Point de départ (Origine)</label>
+              <textarea id="origin" name="origin" class="form-control" rows="2" style="resize: none; min-height: 60px; height: auto;" placeholder="Ex: 10 Rue de la Paix, Paris" required>{{.Origin}}</textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="destination">Destination</label>
+              <textarea id="destination" name="destination" class="form-control" rows="2" style="resize: none; min-height: 60px; height: auto;" placeholder="Ex: Gare de Lyon, Paris" required>{{.Destination}}</textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="departure_time">Heure de départ souhaitée</label>
+              <input type="time" id="departure_time" name="departure_time" value="{{.DepartureTime}}" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+              <label for="maximum_initial_walk">Marche initiale maximale (minutes)</label>
+              <input type="number" id="maximum_initial_walk" name="maximum_initial_walk" value="{{.MaxInitialWalkMinutes}}" min="1" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+              <label for="saint_lazare_transfer">Temps de correspondance à Saint-Lazare (minutes)</label>
+              <input type="number" id="saint_lazare_transfer" name="saint_lazare_transfer" value="{{.SaintLazareTransferMinutes}}" min="1" class="form-control" required>
+            </div>
+
+            <fieldset class="weekday-fieldset">
+              <legend class="weekday-legend">Jours actifs</legend>
+              <div class="days-container">
+                <div class="day-checkbox">
+                  <input type="checkbox" id="day-monday" name="days" value="monday" {{if index .Days "monday"}}checked{{end}}>
+                  <label for="day-monday" class="day-label">LUN</label>
+                </div>
+                <div class="day-checkbox">
+                  <input type="checkbox" id="day-tuesday" name="days" value="tuesday" {{if index .Days "tuesday"}}checked{{end}}>
+                  <label for="day-tuesday" class="day-label">MAR</label>
+                </div>
+                <div class="day-checkbox">
+                  <input type="checkbox" id="day-wednesday" name="days" value="wednesday" {{if index .Days "wednesday"}}checked{{end}}>
+                  <label for="day-wednesday" class="day-label">MER</label>
+                </div>
+                <div class="day-checkbox">
+                  <input type="checkbox" id="day-thursday" name="days" value="thursday" {{if index .Days "thursday"}}checked{{end}}>
+                  <label for="day-thursday" class="day-label">JEU</label>
+                </div>
+                <div class="day-checkbox">
+                  <input type="checkbox" id="day-friday" name="days" value="friday" {{if index .Days "friday"}}checked{{end}}>
+                  <label for="day-friday" class="day-label">VEN</label>
+                </div>
+                <div class="day-checkbox">
+                  <input type="checkbox" id="day-saturday" name="days" value="saturday" {{if index .Days "saturday"}}checked{{end}}>
+                  <label for="day-saturday" class="day-label">SAM</label>
+                </div>
+                <div class="day-checkbox">
+                  <input type="checkbox" id="day-sunday" name="days" value="sunday" {{if index .Days "sunday"}}checked{{end}}>
+                  <label for="day-sunday" class="day-label">DIM</label>
+                </div>
+              </div>
+            </fieldset>
+
+            <button type="submit" class="btn btn-primary">
+              {{if .ID}}ENREGISTRER LES MODIFICATIONS{{else}}ENREGISTRER LE TRAJET{{end}}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    {{template "result.html" .}}
+  </main>
+
+  <footer class="transit-footer">
+    <p>© 2026 Mind the Time — Île-de-France Mobilités</p>
+  </footer>
+
+  <script src="/static/app.js?v=13"></script>
+</body>
+</html>

@@ -1,0 +1,426 @@
+{{if .HasResult}}
+<div class="transit-card" id="result-section">
+  <div class="card-header">
+    <span class="status-dot warning-dot"></span>
+    <h2>RECOMMANDATION DE DÉPART</h2>
+  </div>
+  <div class="card-body">
+    {{if .ProviderUnavailable}}
+    <div class="transit-card alert-card" style="margin-bottom: 0;">
+      <div class="card-header warning-header">
+        <span class="status-dot warning-dot"></span>
+        <h3>RECOMMANDATIONS INDISPONIBLES</h3>
+      </div>
+      <div class="card-body">
+        <p class="alert-message">
+          L'évaluation PRIM est indisponible dans cette version. Les recommandations de départ ne sont pas prises en charge.
+        </p>
+        <p class="alert-message" style="margin-top: var(--space-2); font-size: 0.9rem; color: var(--text-muted);">
+          Note : Vous pouvez toujours créer, modifier et supprimer vos trajets enregistrés. Seule l'évaluation PRIM est indisponible dans cette version.
+        </p>
+      </div>
+    </div>
+    {{else}}
+
+    {{if not .HasSelection}}
+    <!-- Step 1: CHOISIR LE PARCOURS (Visible) -->
+    <div class="step-1-content">
+      <h3 style="font-size: 0.95rem; color: var(--accent-primary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: var(--space-3);">Parcours disponibles par combinaison de lignes</h3>
+      <div class="parcours-list">
+        {{range .RouteOptions}}
+        <form action="/commutes/{{$.ID}}/evaluate" method="POST" class="parcours-option-form">
+          <input type="hidden" name="selected_combination" value="{{.Combination}}">
+          <input type="hidden" name="date" value="{{$.EvalDate}}">
+          <input type="hidden" name="time" value="{{$.EvalTime}}">
+          <input type="hidden" name="maximum_initial_walk" value="{{$.MaxInitialWalkMinutes}}">
+          <input type="hidden" name="saint_lazare_transfer" value="{{$.SaintLazareTransferMinutes}}">
+          <button type="submit" class="parcours-option-btn" aria-label="Choisir le parcours {{.Combination}}, départ à {{.RecommendedTime}}">
+            <div class="parcours-option-content">
+              <span class="status-dot secondary-dot"></span>
+              <strong class="parcours-combination">✦ {{.Combination}}</strong>
+            </div>
+            <span class="parcours-time">Départ : {{.RecommendedTime}}</span>
+          </button>
+        </form>
+        {{end}}
+      </div>
+    </div>
+
+    {{else}}
+    <!-- Step 2 & 3: VOS TEMPS & VOTRE HEURE DE DÉPART (Visible) -->
+    <div class="step-2-3-content">
+      <div class="chosen-parcours-card">
+        <div class="chosen-parcours-header">
+          <div class="chosen-parcours-title">
+            <span class="status-dot primary-dot"></span>
+            <strong>✦ {{.SelectedCombination}}</strong>
+          </div>
+          <form action="/commutes/{{$.ID}}/evaluate" method="POST" style="display: inline;">
+            <input type="hidden" name="selected_combination" value="">
+            <input type="hidden" name="date" value="{{$.EvalDate}}">
+            <input type="hidden" name="time" value="{{$.EvalTime}}">
+            <input type="hidden" name="maximum_initial_walk" value="{{$.MaxInitialWalkMinutes}}">
+            <input type="hidden" name="saint_lazare_transfer" value="{{$.SaintLazareTransferMinutes}}">
+            <button type="submit" class="btn-back" aria-label="Retourner à l'étape 1, changer de parcours">← Changer de parcours</button>
+          </form>
+        </div>
+
+        {{range .RouteOptions}}
+        {{if .IsSelected}}
+        <form action="/commutes/{{$.ID}}/evaluate" method="POST" style="display: flex; flex-direction: column; gap: var(--space-3);">
+          <input type="hidden" name="selected_combination" value="{{.Combination}}">
+          <input type="hidden" name="date" value="{{$.EvalDate}}">
+          <input type="hidden" name="time" value="{{$.EvalTime}}">
+
+          {{if .RouteLegs}}
+          <div>
+            <h4 style="font-size: 0.85rem; margin-bottom: var(--space-2); color: var(--text-muted); text-transform: uppercase;">Étapes & Réglage des temps de correspondance</h4>
+            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-2);">
+              {{range $idx, $leg := .RouteLegs}}
+              {{if eq $idx 0}}
+              <li style="display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.04); padding: var(--space-2) var(--space-3); border-radius: 4px; font-size: 0.85rem; border-left: 3px solid var(--accent-secondary);">
+                <div style="display: flex; align-items: center; gap: var(--space-2);">
+                  <span>🚶 <strong>Marche initiale :</strong> {{if and $.MaxInitialWalkMinutes (ne $.MaxInitialWalkMinutes "0")}}{{$.MaxInitialWalkMinutes}}{{else}}{{.DurationMins}}{{end}} min</span>
+                </div>
+                <span style="color: var(--text-muted);">{{.Duration}} ({{.TimeRange}})</span>
+              </li>
+              {{else if .IsWalking}}
+              <li style="display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.04); padding: var(--space-2) var(--space-3); border-radius: 4px; font-size: 0.85rem; border-left: 3px solid var(--accent-warning);">
+                <div style="display: flex; align-items: center; gap: var(--space-2);">
+                  <span>⏳ <strong>Correspondance :</strong> {{if and $.SaintLazareTransferMinutes (ne $.SaintLazareTransferMinutes "0")}}{{$.SaintLazareTransferMinutes}}{{else}}{{.DurationMins}}{{end}} min</span>
+                </div>
+                <span style="color: var(--text-muted);">{{.Duration}} ({{.TimeRange}})</span>
+              </li>
+              {{else}}
+              <li style="display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.03); padding: var(--space-2) var(--space-3); border-radius: 4px; font-size: 0.85rem;">
+                <span>🚆 {{if .Label}}<strong>{{.Label}}</strong> · {{end}}<strong>{{.From}}</strong> ➔ <strong>{{.To}}</strong></span>
+                <span style="color: var(--text-muted);">{{.Duration}} ({{.TimeRange}})</span>
+              </li>
+              {{end}}
+              {{end}}
+            </ul>
+          </div>
+          {{end}}
+
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: var(--space-2);">
+            * Note : Les temps de marche et de correspondance enregistrés sont appliqués globalement comme un tampon unique pour l'ensemble du trajet, et non comme des tampons individuels modifiables par étape.
+          </p>
+
+          <fieldset class="search-window-fieldset">
+            <legend class="search-window-legend">Plage de recherche</legend>
+            <div class="search-window-fields">
+              <label class="search-window-field">
+                <span>De</span>
+                <input type="time" name="window_start" value="{{$.WindowStart}}" class="form-control search-window-input">
+              </label>
+              <label class="search-window-field">
+                <span>à</span>
+                <input type="time" name="window_end" value="{{$.WindowEnd}}" class="form-control search-window-input">
+              </label>
+            </div>
+          </fieldset>
+
+          <button type="submit" class="btn btn-primary" style="font-size: 0.85rem; padding: var(--space-2) var(--space-3); margin-top: var(--space-2);">
+            ✦ RECALCULER L'HORAIRE POUR CE PARCOURS
+          </button>
+        </form>
+        {{end}}
+        {{end}}
+      </div>
+
+      <div class="step-3-content" style="border-top: 1px solid var(--border-color); padding-top: var(--space-4);">
+        <h3 style="font-size: 0.95rem; color: var(--accent-primary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: var(--space-3);">Votre heure de départ</h3>
+        {{range .RouteOptions}}
+        {{if .IsSelected}}
+        {{if .InterchangeWarning}}
+        <p role="status" class="interchange-warning" style="margin-top: var(--space-3);">⚠️ {{.InterchangeWarning}}</p>
+        {{end}}
+        {{end}}
+        {{end}}
+
+        {{if .DepartureOptions}}
+        <div class="departure-options-section">
+          <h4 class="departure-options-title">OPTIONS DE DÉPART</h4>
+          <div class="departure-options-list">
+            {{range .DepartureOptions}}
+            <div class="departure-option-card">
+              <div class="departure-option-times">
+                <div class="departure-time-group">
+                  <span class="time-label">Départ</span>
+                  <span class="time-value">{{.LeaveAt}}</span>
+                </div>
+                <div class="time-separator">➔</div>
+                <div class="arrival-time-group">
+                  <span class="time-label">Arrivée</span>
+                  <span class="time-value">{{.Arrival}}</span>
+                </div>
+              </div>
+              <div class="departure-option-meta">
+                <span class="duration-value">⏱ {{.Duration}}</span>
+                <div class="departure-option-badges">
+                  {{if .IsFastest}}
+                  <span class="badge badge-fastest">LE PLUS COURT</span>
+                  {{end}}
+                  {{if .IsLatest}}
+                  <span class="badge badge-latest">PARTIR LE PLUS TARD</span>
+                  {{end}}
+                </div>
+              </div>
+            </div>
+            {{end}}
+          </div>
+        </div>
+        {{else}}
+        <p role="status" class="departure-options-empty">
+          Aucune heure de départ n’a pu être calculée sur cette plage. Élargissez la plage de recherche, ou réessayez si le fournisseur était momentanément indisponible.
+        </p>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+{{if .ID}}
+<style>
+  .btn-danger {
+    background-color: var(--accent-error);
+    color: #ffffff;
+    box-shadow: 4px 4px 0px 0px #8a1f0f;
+  }
+  .btn-danger:hover {
+    background-color: #f04a30;
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0px 0px #8a1f0f;
+  }
+  .btn-danger:active {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0px 0px #8a1f0f;
+  }
+  .btn-primary:disabled {
+    background-color: #2e2e33 !important;
+    color: #d1d1d6 !important;
+    box-shadow: none !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+  }
+</style>
+
+<div class="transit-card" id="exploration-section" style="margin-bottom: var(--space-5);">
+  <div class="card-header">
+    <span class="status-dot primary-dot"></span>
+    <h2>Explorer les combinaisons</h2>
+  </div>
+  <div class="card-body">
+    <p style="margin-bottom: var(--space-4); font-size: 0.95rem; color: var(--text-muted);">
+      Découvrez les combinaisons de lignes disponibles pour ce trajet. Par défaut, l'exploration utilise la prochaine date de service active et trois périodes représentatives (matin 08:00, midi 12:00, soir 18:00). Vous pouvez également spécifier une date et une plage horaire personnalisées.
+    </p>
+
+    <form action="/commutes/{{.ID}}/explore" method="POST" style="display: flex; flex-direction: column; gap: var(--space-3);">
+      <div style="display: grid; grid-template-columns: 1fr; gap: var(--space-3);">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="explore-date">Date d'exploration (optionnelle)</label>
+          <input type="date" id="explore-date" name="date" value="{{.ExplorationDate}}" class="form-control">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3);">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="explore-start">Heure de début (optionnelle)</label>
+            <input type="time" id="explore-start" name="window_start" value="{{.ExplorationStart}}" class="form-control">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="explore-end">Heure de fin (optionnelle)</label>
+            <input type="time" id="explore-end" name="window_end" value="{{.ExplorationEnd}}" class="form-control">
+          </div>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary" {{if .ProviderUnavailable}}disabled{{end}}>Lancer l'exploration</button>
+    </form>
+
+    {{if .HasExploredResult}}
+    <div style="margin-top: var(--space-5); border-top: 1px solid var(--border-color); padding-top: var(--space-4);">
+      <h3 style="font-size: 1rem; color: var(--accent-primary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: var(--space-3);">Combinaisons découvertes</h3>
+
+      {{if .ExploredCandidates}}
+      <form action="/commutes/{{.ID}}/save-combinations" method="POST" style="display: flex; flex-direction: column; gap: var(--space-4);">
+        <input type="hidden" name="date" value="{{.ExplorationDate}}">
+        <input type="hidden" name="window_start" value="{{.ExplorationStart}}">
+        <input type="hidden" name="window_end" value="{{.ExplorationEnd}}">
+
+        <div style="display: flex; flex-direction: column; gap: var(--space-3);">
+          {{range .ExploredCandidates}}
+          <div class="departure-option-card" style="flex-direction: column; align-items: flex-start; gap: var(--space-2); border-color: var(--accent-primary);">
+            <div style="display: flex; align-items: center; gap: var(--space-3); width: 100%;">
+              <input type="checkbox" name="fingerprints" value="{{.Fingerprint}}" id="fp-{{.Fingerprint}}" style="width: 20px; height: 20px; cursor: pointer;">
+              <label for="fp-{{.Fingerprint}}" style="font-weight: 700; color: #ffffff; cursor: pointer; flex: 1;">
+                ✦ {{.Display}}
+              </label>
+            </div>
+            <div style="padding-left: 32px; width: 100%;">
+              <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-1);">
+                {{range .Legs}}
+                <li style="font-size: 0.85rem; color: var(--text-muted);">
+                  🚆 {{if .Label}}<strong>{{.Label}}</strong> · {{end}}<strong>{{.From}}</strong> ➔ <strong>{{.To}}</strong>
+                </li>
+                {{end}}
+              </ul>
+            </div>
+          </div>
+          {{end}}
+        </div>
+
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: var(--space-2);">
+          * Note : Les temps de marche et de correspondance enregistrés sont appliqués globalement comme un tampon unique pour l'ensemble du trajet, et non comme des tampons individuels modifiables par étape.
+        </p>
+
+        <button type="submit" class="btn btn-primary">Enregistrer les parcours sélectionnés</button>
+      </form>
+      {{else}}
+      <p style="color: var(--accent-warning); font-weight: 700;">Aucune combinaison de lignes n'a été découverte pour cette période.</p>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+</div>
+
+<div class="transit-card" id="planning-section" style="margin-bottom: var(--space-5);">
+  <div class="card-header">
+    <span class="status-dot secondary-dot"></span>
+    <h2>Planifier un départ</h2>
+  </div>
+  <div class="card-body">
+    <p style="margin-bottom: var(--space-4); font-size: 0.95rem; color: var(--text-muted);">
+      Sélectionnez un ou plusieurs parcours enregistrés pour trouver le meilleur départ sur une plage horaire.
+    </p>
+
+    {{if not .SavedCombinations}}
+    <div style="padding: var(--space-4); text-align: center; color: var(--text-muted); border: var(--border-width) dashed var(--border-color); border-radius: 4px;">
+      Aucun parcours enregistré. Utilisez la section d'exploration ci-dessus pour découvrir et enregistrer des combinaisons de lignes.
+    </div>
+    {{else}}
+    <form action="/commutes/{{.ID}}/plan" method="POST" style="display: flex; flex-direction: column; gap: var(--space-4);">
+      <div style="display: flex; flex-direction: column; gap: var(--space-3);">
+        <h3 style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: var(--space-1);">Parcours enregistrés</h3>
+        {{range .SavedCombinations}}
+        <div class="departure-option-card" style="flex-direction: column; align-items: flex-start; gap: var(--space-2); border-color: var(--accent-secondary);">
+          <div style="display: flex; align-items: center; gap: var(--space-3); width: 100%;">
+            <input type="checkbox" name="saved_combination_ids" value="{{.ID}}" id="sc-{{.ID}}" style="width: 20px; height: 20px; cursor: pointer;">
+            <label for="sc-{{.ID}}" style="font-weight: 700; color: #ffffff; cursor: pointer; flex: 1;">
+              ✦ {{.Combination}}
+            </label>
+          </div>
+          <div style="padding-left: 32px; width: 100%;">
+            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-1);">
+              {{range .Legs}}
+              <li style="font-size: 0.85rem; color: var(--text-muted);">
+                🚆 {{if .Label}}<strong>{{.Label}}</strong> · {{end}}<strong>{{.From}}</strong> ➔ <strong>{{.To}}</strong>
+              </li>
+              {{end}}
+            </ul>
+          </div>
+        </div>
+        {{end}}
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr; gap: var(--space-3);">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="plan-date">Date de planification (optionnelle)</label>
+          <input type="date" id="plan-date" name="date" value="{{.PlanningDate}}" class="form-control">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3);">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="plan-start">Heure de début (optionnelle)</label>
+            <input type="time" id="plan-start" name="window_start" value="{{.PlanningStart}}" class="form-control">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="plan-end">Heure de fin (optionnelle)</label>
+            <input type="time" id="plan-end" name="window_end" value="{{.PlanningEnd}}" class="form-control">
+          </div>
+        </div>
+      </div>
+
+      <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: var(--space-2);">
+        * Note : Les temps de marche et de correspondance enregistrés sont appliqués globalement comme un tampon unique pour l'ensemble du trajet, et non comme des tampons individuels modifiables par étape.
+      </p>
+
+      <button type="submit" class="btn btn-primary" style="background-color: var(--accent-secondary); box-shadow: 4px 4px 0px 0px #003373;">Planifier le départ</button>
+    </form>
+    {{end}}
+
+    {{if .HasPlannedResult}}
+    <div style="margin-top: var(--space-5); border-top: 1px solid var(--border-color); padding-top: var(--space-4);">
+      <h3 style="font-size: 1rem; color: var(--accent-secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: var(--space-3);">Résultats de planification</h3>
+
+      <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+        {{range .PlannedResults}}
+        <div class="transit-card" style="border-color: {{if eq .OutcomeType "viable"}}var(--accent-primary){{else}}var(--accent-warning){{end}};">
+          <div class="card-header" style="background-color: #000000; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: var(--space-2);">
+              <span class="status-dot {{if eq .OutcomeType "viable"}}primary-dot{{else}}warning-dot{{end}}"></span>
+              <strong style="color: #ffffff;">✦ {{.Combination}}</strong>
+            </div>
+            {{if .IsBest}}
+            <span class="badge badge-fastest" style="background-color: var(--accent-primary); color: #121214; border: none;">RECOMMANDÉ</span>
+            {{end}}
+          </div>
+          <div class="card-body">
+            <p style="font-weight: 700; margin-bottom: var(--space-3); color: {{if eq .OutcomeType "viable"}}var(--accent-primary){{else}}var(--accent-warning){{end}};">
+              {{.Outcome}}
+            </p>
+
+            {{if .Options}}
+            <div class="departure-options-list">
+              {{range .Options}}
+              <div class="departure-option-card">
+                <div class="departure-option-times">
+                  <div class="departure-time-group">
+                    <span class="time-label">Départ</span>
+                    <span class="time-value">{{.LeaveAt}}</span>
+                  </div>
+                  <div class="time-separator">➔</div>
+                  <div class="arrival-time-group">
+                    <span class="time-label">Arrivée</span>
+                    <span class="time-value">{{.Arrival}}</span>
+                  </div>
+                </div>
+                <div class="departure-option-meta">
+                  <span class="duration-value">⏱ {{.Duration}}</span>
+                  <div class="departure-option-badges">
+                    {{if .IsFastest}}
+                    <span class="badge badge-fastest">LE PLUS COURT</span>
+                    {{end}}
+                    {{if .IsLatest}}
+                    <span class="badge badge-latest">PARTIR LE PLUS TARD</span>
+                    {{end}}
+                  </div>
+                </div>
+              </div>
+              {{end}}
+            </div>
+            {{end}}
+          </div>
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+</div>
+
+<div class="transit-card" id="delete-section" style="border-color: var(--accent-error); box-shadow: 4px 4px 0px 0px var(--accent-error);">
+  <div class="card-header" style="border-bottom-color: var(--accent-error);">
+    <span class="status-dot error-dot"></span>
+    <h2>SUPPRIMER LE TRAJET</h2>
+  </div>
+  <div class="card-body">
+    <p style="margin-bottom: var(--space-4); font-size: 0.95rem; color: var(--text-muted);">
+      Cette action est irréversible. Le trajet sera définitivement supprimé de votre liste.
+    </p>
+    <form action="/commutes/{{.ID}}/delete" method="POST">
+      <button type="submit" class="btn btn-danger">SUPPRIMER LE TRAJET</button>
+    </form>
+  </div>
+</div>
+{{end}}
