@@ -31,6 +31,11 @@ tasks:
       - sleep 1
       - curl -s http://127.0.0.1:5435/healthz
 
+  e2e:fixtures:
+    desc: Rebuild e2e/fixtures from the deterministic synthetic PRIM upstream (replaces existing fixtures)
+    cmds:
+      - go run ./e2e/genfixtures
+
   e2e:
     desc: Run the Playwright E2E functional test suite against a disposable server
     cmds:
@@ -47,6 +52,9 @@ tasks:
     internal: true
     desc: Start a throwaway server on E2E_PORT (default 5436) with its own store, run SUITE, then tear it down
     cmds:
+      # Locally recorded fixtures are respected; only a missing directory is
+      # seeded with the synthetic ones.
+      - test -d e2e/fixtures || go run ./e2e/genfixtures
       - task: build
       - |
         bash -c '
