@@ -613,14 +613,14 @@ func TestServiceDateUsesParisLocalMidnight(t *testing.T) {
 
 	depTime, _ := domain.NewDepartureTime("18:00")
 	schedule, _ := domain.NewWeeklySchedule([]time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday, time.Saturday, time.Sunday}, depTime)
-	serviceDate, err := serviceDateFromRequest(request, schedule, now)
+	paris, err := domain.NetworkLocation()
+	if err != nil {
+		t.Fatalf("NetworkLocation() error = %v", err)
+	}
+	serviceDate, err := serviceDateFromRequest(request, schedule, now, paris)
 
 	if err != nil {
 		t.Fatalf("serviceDateFromRequest() error = %v", err)
-	}
-	paris, err := time.LoadLocation("Europe/Paris")
-	if err != nil {
-		t.Fatalf("LoadLocation(Europe/Paris) error = %v", err)
 	}
 	want := time.Date(2026, time.January, 5, 0, 0, 0, 0, paris)
 	if !serviceDate.Equal(want) || serviceDate.Location().String() != paris.String() {
@@ -634,7 +634,11 @@ func TestExplicitServiceDateUsesParisMidnightOnDSTTransition(t *testing.T) {
 
 	depTime, _ := domain.NewDepartureTime("18:00")
 	schedule, _ := domain.NewWeeklySchedule([]time.Weekday{time.Sunday}, depTime)
-	serviceDate, err := serviceDateFromRequest(request, schedule, time.Time{})
+	paris, err := domain.NetworkLocation()
+	if err != nil {
+		t.Fatalf("NetworkLocation() error = %v", err)
+	}
+	serviceDate, err := serviceDateFromRequest(request, schedule, time.Time{}, paris)
 
 	if err != nil {
 		t.Fatalf("serviceDateFromRequest() error = %v", err)

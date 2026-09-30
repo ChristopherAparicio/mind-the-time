@@ -33,8 +33,8 @@ func TestRoutePatternDiscoveryEvaluatesEveryRepresentativeInstantAndKeepsDistinc
 	if got, want := len(candidates), 2; got != want {
 		t.Fatalf("candidates = %d, want %d; matching labels must not merge distinct provider IDs", got, want)
 	}
-	if candidates[0].Display != "Train L" || candidates[1].Display != "Train L" {
-		t.Fatalf("candidate displays = %#v, want presentation labels", candidates)
+	if candidates[0].Pattern.Combination() != "Train L" || candidates[1].Pattern.Combination() != "Train L" {
+		t.Fatalf("candidate combinations = %#v, want matching line combinations", candidates)
 	}
 	for _, candidate := range candidates {
 		leg := candidate.Pattern.Legs()[0]

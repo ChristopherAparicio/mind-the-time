@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -61,6 +60,7 @@ type Server struct {
 	templateName string
 	deps         Dependencies
 	handler      http.Handler
+	location     *time.Location
 }
 
 type ownerContextKey struct{}
@@ -174,7 +174,11 @@ func NewServer(assets fs.FS, dependencies Dependencies) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create static asset filesystem: %w", err)
 	}
-	server := &Server{templates: templates, templateName: templateName, deps: dependencies}
+	location, err := domain.NetworkLocation()
+	if err != nil {
+		return nil, fmt.Errorf("load network timezone: %w", err)
+	}
+	server := &Server{templates: templates, templateName: templateName, deps: dependencies, location: location}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", server.healthz)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(staticAssets)))
@@ -488,7 +492,7 @@ func (s *Server) evaluateCommute(writer http.ResponseWriter, request *http.Reque
 		return
 	}
 	request.Body = http.MaxBytesReader(writer, request.Body, evaluationFormMaxBytes)
-	serviceDate, err := serviceDateFromRequest(request, record.Commute.Schedule(), s.deps.Now())
+	serviceDate, err := serviceDateFromRequest(request, record.Commute.Schedule(), s.deps.Now(), s.location)
 	if errors.Is(err, errFormTooLarge) {
 		s.renderPage(writer, request, http.StatusRequestEntityTooLarge, errorPageData(record, s.deps.ProviderAvailable, "La taille du formulaire dépasse la limite autorisée.", s.deps.Now()))
 		return
@@ -501,11 +505,6 @@ func (s *Server) evaluateCommute(writer http.ResponseWriter, request *http.Reque
 		s.renderPage(writer, request, http.StatusBadRequest, errorPageData(record, s.deps.ProviderAvailable, "Le trajet n’est pas actif à cette date.", s.deps.Now()))
 		return
 	}
-	paris, err := time.LoadLocation("Europe/Paris")
-	if err != nil {
-		http.Error(writer, "Erreur interne du serveur.", http.StatusInternalServerError)
-		return
-	}
 	evalTimeStr := request.PostForm.Get("time")
 	var departure time.Time
 	if strings.TrimSpace(evalTimeStr) != "" {
@@ -514,7 +513,7 @@ func (s *Server) evaluateCommute(writer http.ResponseWriter, request *http.Reque
 			s.renderPage(writer, request, http.StatusBadRequest, errorPageData(record, s.deps.ProviderAvailable, "L'heure d'évaluation est invalide.", s.deps.Now()))
 			return
 		}
-		departure = time.Date(serviceDate.Year(), serviceDate.Month(), serviceDate.Day(), parsedTime.Hour(), parsedTime.Minute(), 0, 0, paris)
+		departure = time.Date(serviceDate.Year(), serviceDate.Month(), serviceDate.Day(), parsedTime.Hour(), parsedTime.Minute(), 0, 0, s.location)
 	} else {
 		departure, err = record.Commute.Schedule().DepartureAt(serviceDate)
 		if err != nil {
@@ -522,35 +521,17 @@ func (s *Server) evaluateCommute(writer http.ResponseWriter, request *http.Reque
 			return
 		}
 	}
-	window := resolveSearchWindow(request.PostForm, serviceDate, departure, paris)
+	window := resolveSearchWindow(request.PostForm, serviceDate, departure, s.location)
 	selectedCombination := strings.TrimSpace(request.PostForm.Get("selected_combination"))
-	customWalkStr := strings.TrimSpace(request.PostForm.Get("maximum_initial_walk"))
-	customTransferStr := strings.TrimSpace(request.PostForm.Get("saint_lazare_transfer"))
 
-	evalCommute := record.Commute
-	if customWalkStr != "" || customTransferStr != "" || selectedCombination != "" {
-		walkMins := int(record.Commute.MaximumInitialWalk().Duration().Minutes())
-		if customWalkStr != "" {
-			if parsed, err := strconv.Atoi(customWalkStr); err == nil && parsed > 0 {
-				walkMins = parsed
-			}
-		}
-		transferMins := int(record.Commute.SaintLazareMinimumTransferTime().Duration().Minutes())
-		if customTransferStr != "" {
-			if parsed, err := strconv.Atoi(customTransferStr); err == nil && parsed > 0 {
-				transferMins = parsed
-			}
-		}
-		prefLinesStr := record.Commute.PreferredLines().Raw()
-		if selectedCombination != "" {
-			prefLinesStr = selectedCombination
-		}
-		walkBuf, _ := domain.NewTransferBuffer(time.Duration(walkMins) * time.Minute)
-		transferBuf, _ := domain.NewTransferBuffer(time.Duration(transferMins) * time.Minute)
-		preferredLines := domain.NewPreferredLines(prefLinesStr)
-		if customCommute, err := domain.NewCommute(record.Commute.Origin(), record.Commute.Destination(), record.Commute.Schedule(), walkBuf, transferBuf, preferredLines); err == nil {
-			evalCommute = customCommute
-		}
+	evalCommute, err := app.CommuteForEvaluation(record.Commute, app.EvaluationOverrides{
+		MaximumInitialWalkMinutes:  request.PostForm.Get("maximum_initial_walk"),
+		SaintLazareTransferMinutes: request.PostForm.Get("saint_lazare_transfer"),
+		SelectedCombination:        selectedCombination,
+	})
+	if err != nil {
+		s.renderPage(writer, request, http.StatusBadRequest, errorPageData(record, s.deps.ProviderAvailable, mapValidationError(err), s.deps.Now()))
+		return
 	}
 
 	routes, err := s.deps.Routes.Evaluate(request.Context(), app.RouteRequest{Commute: evalCommute, Departure: departure})
@@ -742,31 +723,15 @@ func inputFromRequest(request *http.Request) (app.CommuteInput, error) {
 	return input, nil
 }
 
-func serviceDateFromRequest(request *http.Request, schedule domain.WeeklySchedule, now time.Time) (time.Time, error) {
+func serviceDateFromRequest(request *http.Request, schedule domain.WeeklySchedule, now time.Time, loc *time.Location) (time.Time, error) {
 	if err := parseForm(request); err != nil {
 		return time.Time{}, err
 	}
 	value := request.PostForm.Get("date")
-	paris, err := time.LoadLocation("Europe/Paris")
-	if err != nil {
-		return time.Time{}, fmt.Errorf("load Paris location: %w", err)
-	}
 	if value == "" {
-		return nextActiveServiceDate(now, schedule, paris), nil
+		return schedule.NextActiveDate(now, loc), nil
 	}
-	return time.ParseInLocation("2006-01-02", value, paris)
-}
-
-func nextActiveServiceDate(start time.Time, schedule domain.WeeklySchedule, loc *time.Location) time.Time {
-	startLocal := start.In(loc)
-	date := time.Date(startLocal.Year(), startLocal.Month(), startLocal.Day(), 0, 0, 0, 0, loc)
-	for i := 0; i < 7; i++ {
-		if schedule.IsActive(date.Weekday()) {
-			return date
-		}
-		date = date.AddDate(0, 0, 1)
-	}
-	return date
+	return time.ParseInLocation("2006-01-02", value, loc)
 }
 
 func parseForm(request *http.Request) error {
@@ -801,6 +766,13 @@ func weekdayByName(value string) (time.Weekday, bool) {
 	}
 }
 
+func networkLocationOrUTC() *time.Location {
+	if loc, err := domain.NetworkLocation(); err == nil {
+		return loc
+	}
+	return time.UTC
+}
+
 func ownerIDFromContext(ctx context.Context) app.OwnerID {
 	ownerID, ok := ctx.Value(ownerContextKey{}).(app.OwnerID)
 	if !ok {
@@ -816,11 +788,7 @@ func newPageData(input app.CommuteInput, commuteID app.CommuteID, providerAvaila
 	}
 	activeDays := weekdays(input)
 
-	paris, err := time.LoadLocation("Europe/Paris")
-	if err != nil {
-		paris = time.UTC
-	}
-	now = now.In(paris)
+	now = now.In(networkLocationOrUTC())
 	evalDate := now.Format("2006-01-02")
 	if len(input.Weekdays) > 0 {
 		var activeDaysArr [7]bool
@@ -997,33 +965,6 @@ func (s *Server) render(writer http.ResponseWriter, status int, data pageData) {
 	}
 }
 
-func generateBoundedInstants(date time.Time, startStr, endStr string, loc *time.Location) ([]time.Time, error) {
-	start, err := domain.NewDepartureTime(startStr)
-	if err != nil {
-		return nil, err
-	}
-	end, err := domain.NewDepartureTime(endStr)
-	if err != nil {
-		return nil, err
-	}
-	startTime := time.Date(date.Year(), date.Month(), date.Day(), start.Hour(), start.Minute(), 0, 0, loc)
-	endTime := time.Date(date.Year(), date.Month(), date.Day(), end.Hour(), end.Minute(), 0, 0, loc)
-	if !endTime.After(startTime) {
-		return nil, errors.New("la plage de recherche doit être croissante")
-	}
-
-	midTime := startTime.Add(endTime.Sub(startTime) / 2)
-
-	instants := []time.Time{startTime}
-	if midTime.After(startTime) && midTime.Before(endTime) {
-		instants = append(instants, midTime)
-	}
-	if endTime.After(startTime) {
-		instants = append(instants, endTime)
-	}
-	return instants, nil
-}
-
 func validateExplorationParams(record app.CommuteRecord, dateStr, startStr, endStr string, now time.Time, loc *time.Location) (time.Time, []time.Time, string, bool) {
 	var serviceDate time.Time
 	var err error
@@ -1036,44 +977,37 @@ func validateExplorationParams(record app.CommuteRecord, dateStr, startStr, endS
 			return time.Time{}, nil, "Le trajet n’est pas actif à cette date.", false
 		}
 	} else {
-		serviceDate = nextActiveServiceDate(now, record.Commute.Schedule(), loc)
+		serviceDate = record.Commute.Schedule().NextActiveDate(now, loc)
 	}
 
 	if (startStr != "" && endStr == "") || (startStr == "" && endStr != "") {
 		return time.Time{}, nil, "Veuillez spécifier à la fois l'heure de début et de fin pour la plage personnalisée.", false
 	}
 
-	var instants []time.Time
-	if startStr != "" && endStr != "" {
-		start, err := domain.NewDepartureTime(startStr)
-		if err != nil {
-			return time.Time{}, nil, "L'heure de début de la plage est invalide.", false
-		}
-		end, err := domain.NewDepartureTime(endStr)
-		if err != nil {
-			return time.Time{}, nil, "L'heure de fin de la plage est invalide.", false
-		}
-		if start.Hour() > end.Hour() || (start.Hour() == end.Hour() && start.Minute() >= end.Minute()) {
-			return time.Time{}, nil, "La plage de recherche doit être croissante.", false
-		}
-
-		instants, err = generateBoundedInstants(serviceDate, startStr, endStr, loc)
-		if err != nil {
-			return time.Time{}, nil, "Erreur lors de la génération de la plage horaire.", false
-		}
-	} else {
-		instants = defaultInstants(serviceDate, loc)
+	if startStr == "" && endStr == "" {
+		return serviceDate, app.DefaultExplorationInstants(serviceDate, loc), "", true
 	}
 
+	start, err := domain.NewDepartureTime(startStr)
+	if err != nil {
+		return time.Time{}, nil, "L'heure de début de la plage est invalide.", false
+	}
+	end, err := domain.NewDepartureTime(endStr)
+	if err != nil {
+		return time.Time{}, nil, "L'heure de fin de la plage est invalide.", false
+	}
+	instants, err := app.ExplorationInstants(serviceDate, start, end, loc)
+	if err != nil {
+		return time.Time{}, nil, "La plage de recherche doit être croissante.", false
+	}
 	return serviceDate, instants, "", true
 }
 
-func defaultInstants(date time.Time, loc *time.Location) []time.Time {
-	return []time.Time{
-		time.Date(date.Year(), date.Month(), date.Day(), 8, 0, 0, 0, loc),
-		time.Date(date.Year(), date.Month(), date.Day(), 12, 0, 0, 0, loc),
-		time.Date(date.Year(), date.Month(), date.Day(), 18, 0, 0, 0, loc),
+func patternDisplayLabel(pattern domain.RoutePattern) string {
+	if display := strings.TrimSpace(pattern.Combination()); display != "" {
+		return display
 	}
+	return "Transports en commun"
 }
 
 func buildPatternLegsDisplay(pattern domain.RoutePattern) []routeLegDisplay {
@@ -1132,17 +1066,11 @@ func (s *Server) exploreCommuteRequest(writer http.ResponseWriter, request *http
 		return
 	}
 
-	paris, err := time.LoadLocation("Europe/Paris")
-	if err != nil {
-		http.Error(writer, "Erreur interne du serveur.", http.StatusInternalServerError)
-		return
-	}
-
 	dateStr := request.PostForm.Get("date")
 	startStr := request.PostForm.Get("window_start")
 	endStr := request.PostForm.Get("window_end")
 
-	serviceDate, instants, errMsg, ok := validateExplorationParams(record, dateStr, startStr, endStr, s.deps.Now(), paris)
+	serviceDate, instants, errMsg, ok := validateExplorationParams(record, dateStr, startStr, endStr, s.deps.Now(), s.location)
 	if !ok {
 		data := newPageData(app.InputFromCommuteRecord(record), record.ID, s.deps.ProviderAvailable, s.deps.Now())
 		s.populateSavedCombinations(&data, record)
@@ -1183,7 +1111,7 @@ func (s *Server) exploreCommuteRequest(writer http.ResponseWriter, request *http
 	for _, cand := range candidates {
 		data.ExploredCandidates = append(data.ExploredCandidates, discoveredCandidateDisplay{
 			Fingerprint: cand.Pattern.Fingerprint(),
-			Display:     cand.Display,
+			Display:     patternDisplayLabel(cand.Pattern),
 			Legs:        buildPatternLegsDisplay(cand.Pattern),
 		})
 	}
@@ -1221,17 +1149,11 @@ func (s *Server) saveCombinationsRequest(writer http.ResponseWriter, request *ht
 		return
 	}
 
-	paris, err := time.LoadLocation("Europe/Paris")
-	if err != nil {
-		http.Error(writer, "Erreur interne du serveur.", http.StatusInternalServerError)
-		return
-	}
-
 	dateStr := request.PostForm.Get("date")
 	startStr := request.PostForm.Get("window_start")
 	endStr := request.PostForm.Get("window_end")
 
-	_, instants, errMsg, ok := validateExplorationParams(record, dateStr, startStr, endStr, s.deps.Now(), paris)
+	_, instants, errMsg, ok := validateExplorationParams(record, dateStr, startStr, endStr, s.deps.Now(), s.location)
 	if !ok {
 		data := newPageData(app.InputFromCommuteRecord(record), record.ID, s.deps.ProviderAvailable, s.deps.Now())
 		s.populateSavedCombinations(&data, record)
@@ -1312,17 +1234,11 @@ func (s *Server) planDeparturesRequest(writer http.ResponseWriter, request *http
 		selectedIDs[i] = app.SavedCombinationID(id)
 	}
 
-	paris, err := time.LoadLocation("Europe/Paris")
-	if err != nil {
-		http.Error(writer, "Erreur interne du serveur.", http.StatusInternalServerError)
-		return
-	}
-
 	dateStr := request.PostForm.Get("date")
 	startStr := request.PostForm.Get("window_start")
 	endStr := request.PostForm.Get("window_end")
 
-	serviceDate, _, errMsg, ok := validateExplorationParams(record, dateStr, startStr, endStr, s.deps.Now(), paris)
+	serviceDate, _, errMsg, ok := validateExplorationParams(record, dateStr, startStr, endStr, s.deps.Now(), s.location)
 	if !ok {
 		data := newPageData(app.InputFromCommuteRecord(record), record.ID, s.deps.ProviderAvailable, s.deps.Now())
 		s.populateSavedCombinations(&data, record)
@@ -1345,12 +1261,12 @@ func (s *Server) planDeparturesRequest(writer http.ResponseWriter, request *http
 	if startStr != "" && endStr != "" {
 		startTime, _ := domain.NewDepartureTime(startStr)
 		endTime, _ := domain.NewDepartureTime(endStr)
-		windowStart = time.Date(serviceDate.Year(), serviceDate.Month(), serviceDate.Day(), startTime.Hour(), startTime.Minute(), 0, 0, paris)
-		windowEnd := time.Date(serviceDate.Year(), serviceDate.Month(), serviceDate.Day(), endTime.Hour(), endTime.Minute(), 0, 0, paris)
+		windowStart = time.Date(serviceDate.Year(), serviceDate.Month(), serviceDate.Day(), startTime.Hour(), startTime.Minute(), 0, 0, s.location)
+		windowEnd := time.Date(serviceDate.Year(), serviceDate.Month(), serviceDate.Day(), endTime.Hour(), endTime.Minute(), 0, 0, s.location)
 		windowDuration = windowEnd.Sub(windowStart)
 	} else {
 		depTime := record.Commute.Schedule().DepartureTime()
-		windowStart = time.Date(serviceDate.Year(), serviceDate.Month(), serviceDate.Day(), depTime.Hour(), depTime.Minute(), 0, 0, paris)
+		windowStart = time.Date(serviceDate.Year(), serviceDate.Month(), serviceDate.Day(), depTime.Hour(), depTime.Minute(), 0, 0, s.location)
 		windowDuration = 30 * time.Minute
 	}
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sort"
-	"strings"
 	"time"
 
 	"mind-the-time/internal/domain"
@@ -14,7 +13,6 @@ var ErrSavedCombinationNotFound = errors.New("saved route combination not found"
 
 type RoutePatternCandidate struct {
 	Pattern domain.RoutePattern
-	Display string
 }
 
 // RoutePatternDiscovery evaluates every already-validated representative
@@ -49,10 +47,7 @@ func (d RoutePatternDiscovery) Discover(ctx context.Context, commute domain.Comm
 				return nil, domain.ErrInvalidRoutePattern
 			}
 			if _, exists := candidates[fingerprint]; !exists {
-				candidates[fingerprint] = RoutePatternCandidate{
-					Pattern: pattern,
-					Display: routePatternDisplay(pattern),
-				}
+				candidates[fingerprint] = RoutePatternCandidate{Pattern: pattern}
 			}
 		}
 	}
@@ -64,13 +59,6 @@ func (d RoutePatternDiscovery) Discover(ctx context.Context, commute domain.Comm
 		return result[left].Pattern.Fingerprint() < result[right].Pattern.Fingerprint()
 	})
 	return result, nil
-}
-
-func routePatternDisplay(pattern domain.RoutePattern) string {
-	if display := strings.TrimSpace(pattern.Combination()); display != "" {
-		return display
-	}
-	return "Transports en commun"
 }
 
 type PatternPlanExecutor interface {

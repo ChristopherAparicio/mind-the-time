@@ -39,6 +39,10 @@ func (d DepartureTime) Minute() int {
 	return int(d.minute)
 }
 
+func (d DepartureTime) Before(other DepartureTime) bool {
+	return d.hour < other.hour || (d.hour == other.hour && d.minute < other.minute)
+}
+
 func (d DepartureTime) isValid() bool {
 	return d.valid && d.hour <= 23 && d.minute <= 59
 }
@@ -80,12 +84,27 @@ func (s WeeklySchedule) DepartureAt(serviceDate time.Time) (time.Time, error) {
 	if !s.isValid() || serviceDate.IsZero() {
 		return time.Time{}, ErrInvalidSchedule
 	}
-	paris, err := time.LoadLocation("Europe/Paris")
+	paris, err := NetworkLocation()
 	if err != nil {
 		return time.Time{}, err
 	}
 	year, month, day := serviceDate.Date()
 	return time.Date(year, month, day, int(s.departureTime.hour), int(s.departureTime.minute), 0, 0, paris), nil
+}
+
+// NextActiveDate returns the first service date, starting from the day of
+// `from` in `loc`, whose weekday is active. When no day is active it returns
+// the date one week out.
+func (s WeeklySchedule) NextActiveDate(from time.Time, loc *time.Location) time.Time {
+	fromLocal := from.In(loc)
+	date := time.Date(fromLocal.Year(), fromLocal.Month(), fromLocal.Day(), 0, 0, 0, 0, loc)
+	for i := 0; i < 7; i++ {
+		if s.IsActive(date.Weekday()) {
+			return date
+		}
+		date = date.AddDate(0, 0, 1)
+	}
+	return date
 }
 
 func (s WeeklySchedule) isValid() bool {

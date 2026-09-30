@@ -465,7 +465,7 @@ func parsePRIMTime(val string) (time.Time, error) {
 	if len(val) < 15 {
 		return time.Time{}, fmt.Errorf("invalid time format")
 	}
-	paris, err := time.LoadLocation("Europe/Paris")
+	paris, err := domain.NetworkLocation()
 	if err != nil {
 		paris = time.UTC
 	}
