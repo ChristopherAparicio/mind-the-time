@@ -2,6 +2,14 @@
 
 Mind the Time est une application Go pour enregistrer un trajet domicile-travail récurrent en Île-de-France, explorer des combinaisons de lignes et planifier les départs de celles qui ont été sauvegardées. Les propriétaires et leurs trajets sont conservés côté serveur dans un fichier d’état local, avec une durée de vie et une capacité limitées.
 
+## Aperçu
+
+L’interface est une PWA pensée pour le mobile (thème « transit », installable sur l’écran d’accueil).
+
+| Sans clé PRIM | Nouveau trajet | Trajet enregistré |
+| --- | --- | --- |
+| ![Accueil sans clé PRIM : bandeau expliquant comment obtenir et configurer une clé](docs/screenshots/home-no-key.png) | ![Formulaire de création d’un trajet rempli](docs/screenshots/home-form.png) | ![Page d’un trajet enregistré avec les sections Explorer les combinaisons et Planifier un départ](docs/screenshots/commute-result.png) |
+
 ## Fonctionnement actuel
 
 Le parcours utilisateur comporte trois étapes :
